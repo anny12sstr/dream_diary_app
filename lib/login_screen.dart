@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Додано для збереження даних
 import 'services/auth_repository.dart';
 import 'constants/app_strings.dart';
 import 'widgets/dream_app_header.dart';
@@ -28,6 +29,26 @@ class _LoginScreenState extends State<LoginScreen> {
   
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail(); 
+  }
+
+  // Функція для завантаження збереженого email
+  void _loadSavedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_email');
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+
+    if (rememberMe && savedEmail != null && savedEmail.isNotEmpty) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _rememberMe = true;
+      });
+    }
+  }
 
   void _showAccountOptions() {
     showDialog(
@@ -85,6 +106,17 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
+      // Логіка збереження або видалення email
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setString('saved_email', _emailController.text.trim());
+        await prefs.setBool('remember_me', true);
+      } else {
+        await prefs.remove('saved_email');
+        await prefs.setBool('remember_me', false);
+      }
+
     } on FirebaseAuthException {
       const message = AppStrings.loginErrorInvalid;
       if (mounted) {
@@ -157,6 +189,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (userCredential.user != null) {
                   await userCredential.user!.linkWithCredential(credential);
                   await userCredential.user!.reload();
+                }
+
+                // зберігаю email і при лінкуванні акаунтів, якщо обрано чекбокс
+                if (_rememberMe) {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('saved_email', email);
+                    await prefs.setBool('remember_me', true);
                 }
                 
                 if (mounted) {
